@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+
+from fastapi import FastAPI, HTTPException
+from database import test_connection
 
 app = FastAPI(title="SecureLink API")
 
@@ -16,3 +18,18 @@ def health():
     return {
         "status": "healthy"
     }
+
+
+@app.get("/db-health")
+def database_health():
+    try:
+        test_connection()
+        return {
+            "status": "success",
+            "message": "Database connection successful"
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection failed. Check server logs."
+        )
