@@ -116,3 +116,36 @@ def device_heartbeat(device: DeviceRegistration):
         )
     finally:
         engine.dispose()
+
+
+@app.get("/api/devices")
+def list_devices():
+    engine = get_engine()
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    SELECT device_id, device_name, status,
+                           last_heartbeat, created_at
+                    FROM devices
+                    ORDER BY created_at DESC
+                """)
+            )
+
+            devices = [
+                dict(row._mapping)
+                for row in result
+            ]
+
+        return {
+            "status": "success",
+            "count": len(devices),
+            "devices": devices
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve devices."
+        )
+    finally:
+        engine.dispose()
