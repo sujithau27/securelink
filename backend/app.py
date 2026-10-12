@@ -22,9 +22,7 @@ def home():
 
 @app.get("/health")
 def health():
-    return {
-        "status": "healthy"
-    }
+    return {"status": "healthy"}
 
 
 @app.get("/db-health")
@@ -45,7 +43,6 @@ def database_health():
 @app.post("/api/devices/register")
 def register_device(device: DeviceRegistration):
     engine = get_engine()
-
     try:
         with engine.begin() as connection:
             connection.execute(
@@ -75,12 +72,47 @@ def register_device(device: DeviceRegistration):
             "message": "Device registered successfully",
             "device_id": device.device_id
         }
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Device registration failed."
         )
+    finally:
+        engine.dispose()
 
+
+@app.post("/api/devices/heartbeat")
+def device_heartbeat(device: DeviceRegistration):
+    engine = get_engine()
+    try:
+        with engine.begin() as connection:
+            result = connection.execute(
+                text("""
+                    UPDATE devices
+                    SET status = 'online',
+                        last_heartbeat = CURRENT_TIMESTAMP
+                    WHERE device_id = :device_id
+                """),
+                {"device_id": device.device_id}
+            )
+
+            if result.rowcount == 0:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Device not found. Register it first."
+                )
+
+        return {
+            "status": "success",
+            "message": "Device heartbeat received",
+            "device_id": device.device_id
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Heartbeat update failed."
+        )
     finally:
         engine.dispose()
