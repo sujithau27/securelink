@@ -1,4 +1,4 @@
-```python
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -84,4 +84,3 @@ def register_device(device: DeviceRegistration):
 
     finally:
         engine.dispose()
-```
