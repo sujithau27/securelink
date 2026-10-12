@@ -7,7 +7,8 @@ from database import test_connection, get_engine
 app = FastAPI(title="SecureLink API", version="0.1.0")
 
 
-# Request models
+# -------------------- REQUEST MODELS --------------------
+
 class DeviceRegistration(BaseModel):
     device_id: str = Field(min_length=1, max_length=100)
     device_name: str = Field(min_length=1, max_length=150)
@@ -19,7 +20,8 @@ class SecurityEvent(BaseModel):
     description: str = Field(min_length=1, max_length=500)
 
 
-# Home
+# -------------------- HOME --------------------
+
 @app.get("/")
 def home():
     return {
@@ -28,13 +30,15 @@ def home():
     }
 
 
-# Health check
+# -------------------- HEALTH CHECK --------------------
+
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
 
-# Database health check
+# -------------------- DATABASE HEALTH --------------------
+
 @app.get("/db-health")
 def database_health():
     try:
@@ -50,7 +54,8 @@ def database_health():
         )
 
 
-# Register a device
+# -------------------- REGISTER DEVICE --------------------
+
 @app.post("/api/devices/register")
 def register_device(device: DeviceRegistration):
     engine = get_engine()
@@ -95,7 +100,8 @@ def register_device(device: DeviceRegistration):
         engine.dispose()
 
 
-# Receive device heartbeat
+# -------------------- DEVICE HEARTBEAT --------------------
+
 @app.post("/api/devices/heartbeat")
 def device_heartbeat(device: DeviceRegistration):
     engine = get_engine()
@@ -137,7 +143,8 @@ def device_heartbeat(device: DeviceRegistration):
         engine.dispose()
 
 
-# List registered devices
+# -------------------- LIST DEVICES --------------------
+
 @app.get("/api/devices")
 def list_devices():
     engine = get_engine()
@@ -174,14 +181,14 @@ def list_devices():
         engine.dispose()
 
 
-# Record a cybersecurity event
+# -------------------- CREATE SECURITY EVENT --------------------
+
 @app.post("/api/events")
 def create_event(event: SecurityEvent):
     engine = get_engine()
 
     try:
         with engine.begin() as connection:
-            # Confirm that the device is registered
             device = connection.execute(
                 text("""
                     SELECT device_id
@@ -197,7 +204,6 @@ def create_event(event: SecurityEvent):
                     detail="Device not found. Register it first."
                 )
 
-            # Save the event in the database
             result = connection.execute(
                 text("""
                     INSERT INTO events (
@@ -234,6 +240,43 @@ def create_event(event: SecurityEvent):
         raise HTTPException(
             status_code=500,
             detail="Could not record security event. Check the events table structure."
+        )
+
+    finally:
+        engine.dispose()
+
+
+# -------------------- LIST SECURITY EVENTS --------------------
+
+@app.get("/api/events")
+def list_events():
+    engine = get_engine()
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    SELECT id, device_id, event_type, description
+                    FROM events
+                    ORDER BY id DESC
+                """)
+            )
+
+            events = [
+                dict(row._mapping)
+                for row in result
+            ]
+
+        return {
+            "status": "success",
+            "count": len(events),
+            "events": events
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve security events."
         )
 
     finally:
