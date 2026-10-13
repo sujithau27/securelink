@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from database import test_connection, get_engine
 
-app = FastAPI(title="SecureLink API", version="0.1.0")
+app = FastAPI(title="SecureLink API", version="0.2.0")
 
 
 # -------------------- REQUEST MODELS --------------------
@@ -66,20 +66,14 @@ def database_health():
 @app.post("/api/devices/register")
 def register_device(device: DeviceRegistration):
     engine = get_engine()
-
     try:
         with engine.begin() as connection:
             connection.execute(
                 text("""
-                    INSERT INTO devices (
-                        device_id, device_name, status
-                    )
-                    VALUES (
-                        :device_id, :device_name, 'offline'
-                    )
+                    INSERT INTO devices (device_id, device_name, status)
+                    VALUES (:device_id, :device_name, 'offline')
                     ON CONFLICT (device_id)
-                    DO UPDATE SET
-                        device_name = EXCLUDED.device_name
+                    DO UPDATE SET device_name = EXCLUDED.device_name
                 """),
                 {
                     "device_id": device.device_id,
@@ -92,13 +86,11 @@ def register_device(device: DeviceRegistration):
             "message": "Device registered successfully",
             "device_id": device.device_id
         }
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Device registration failed."
         )
-
     finally:
         engine.dispose()
 
@@ -108,7 +100,6 @@ def register_device(device: DeviceRegistration):
 @app.post("/api/devices/heartbeat")
 def device_heartbeat(device: DeviceRegistration):
     engine = get_engine()
-
     try:
         with engine.begin() as connection:
             result = connection.execute(
@@ -132,16 +123,13 @@ def device_heartbeat(device: DeviceRegistration):
             "message": "Device heartbeat received",
             "device_id": device.device_id
         }
-
     except HTTPException:
         raise
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Heartbeat update failed."
         )
-
     finally:
         engine.dispose()
 
@@ -151,7 +139,6 @@ def device_heartbeat(device: DeviceRegistration):
 @app.get("/api/devices")
 def list_devices():
     engine = get_engine()
-
     try:
         with engine.connect() as connection:
             result = connection.execute(
@@ -162,24 +149,18 @@ def list_devices():
                     ORDER BY created_at DESC
                 """)
             )
-
-            devices = [
-                dict(row._mapping)
-                for row in result
-            ]
+            devices = [dict(row._mapping) for row in result]
 
         return {
             "status": "success",
             "count": len(devices),
             "devices": devices
         }
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Could not retrieve devices."
         )
-
     finally:
         engine.dispose()
 
@@ -189,13 +170,11 @@ def list_devices():
 @app.post("/api/events")
 def create_event(event: SecurityEvent):
     engine = get_engine()
-
     try:
         with engine.begin() as connection:
             device = connection.execute(
                 text("""
-                    SELECT device_id
-                    FROM devices
+                    SELECT device_id FROM devices
                     WHERE device_id = :device_id
                 """),
                 {"device_id": event.device_id}
@@ -209,12 +188,8 @@ def create_event(event: SecurityEvent):
 
             result = connection.execute(
                 text("""
-                    INSERT INTO events (
-                        device_id, event_type, description
-                    )
-                    VALUES (
-                        :device_id, :event_type, :description
-                    )
+                    INSERT INTO events (device_id, event_type, description)
+                    VALUES (:device_id, :event_type, :description)
                     RETURNING id
                 """),
                 {
@@ -223,7 +198,6 @@ def create_event(event: SecurityEvent):
                     "description": event.description
                 }
             )
-
             event_id = result.scalar()
 
         return {
@@ -231,16 +205,13 @@ def create_event(event: SecurityEvent):
             "message": "Security event recorded",
             "event_id": event_id
         }
-
     except HTTPException:
         raise
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Could not record security event."
         )
-
     finally:
         engine.dispose()
 
@@ -250,7 +221,6 @@ def create_event(event: SecurityEvent):
 @app.get("/api/events")
 def list_events():
     engine = get_engine()
-
     try:
         with engine.connect() as connection:
             result = connection.execute(
@@ -260,24 +230,18 @@ def list_events():
                     ORDER BY id DESC
                 """)
             )
-
-            events = [
-                dict(row._mapping)
-                for row in result
-            ]
+            events = [dict(row._mapping) for row in result]
 
         return {
             "status": "success",
             "count": len(events),
             "events": events
         }
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Could not retrieve security events."
         )
-
     finally:
         engine.dispose()
 
@@ -287,13 +251,11 @@ def list_events():
 @app.post("/api/alerts")
 def create_alert(alert: SecurityAlert):
     engine = get_engine()
-
     try:
         with engine.begin() as connection:
             device = connection.execute(
                 text("""
-                    SELECT device_id
-                    FROM devices
+                    SELECT device_id FROM devices
                     WHERE device_id = :device_id
                 """),
                 {"device_id": alert.device_id}
@@ -308,18 +270,12 @@ def create_alert(alert: SecurityAlert):
             result = connection.execute(
                 text("""
                     INSERT INTO alerts (
-                        device_id,
-                        alert_type,
-                        severity,
-                        message,
-                        is_resolved
+                        device_id, alert_type, severity,
+                        message, is_resolved
                     )
                     VALUES (
-                        :device_id,
-                        :alert_type,
-                        :severity,
-                        :message,
-                        FALSE
+                        :device_id, :alert_type, :severity,
+                        :message, FALSE
                     )
                     RETURNING id
                 """),
@@ -330,7 +286,6 @@ def create_alert(alert: SecurityAlert):
                     "message": alert.message
                 }
             )
-
             alert_id = result.scalar()
 
         return {
@@ -338,16 +293,13 @@ def create_alert(alert: SecurityAlert):
             "message": "Security alert created",
             "alert_id": alert_id
         }
-
     except HTTPException:
         raise
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Could not create security alert."
         )
-
     finally:
         engine.dispose()
 
@@ -357,7 +309,6 @@ def create_alert(alert: SecurityAlert):
 @app.get("/api/alerts")
 def list_alerts():
     engine = get_engine()
-
     try:
         with engine.connect() as connection:
             result = connection.execute(
@@ -368,23 +319,60 @@ def list_alerts():
                     ORDER BY created_at DESC
                 """)
             )
-
-            alerts = [
-                dict(row._mapping)
-                for row in result
-            ]
+            alerts = [dict(row._mapping) for row in result]
 
         return {
             "status": "success",
             "count": len(alerts),
             "alerts": alerts
         }
-
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Could not retrieve security alerts."
         )
+    finally:
+        engine.dispose()
 
+
+# -------------------- DASHBOARD SUMMARY API --------------------
+
+@app.get("/api/dashboard/summary")
+def dashboard_summary():
+    engine = get_engine()
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    SELECT
+                        (SELECT COUNT(*) FROM devices)
+                            AS total_devices,
+                        (SELECT COUNT(*) FROM devices
+                            WHERE status = 'online')
+                            AS online_devices,
+                        (SELECT COUNT(*) FROM devices
+                            WHERE status = 'offline')
+                            AS offline_devices,
+                        (SELECT COUNT(*) FROM events)
+                            AS total_events,
+                        (SELECT COUNT(*) FROM alerts)
+                            AS total_alerts,
+                        (SELECT COUNT(*) FROM alerts
+                            WHERE is_resolved = FALSE)
+                            AS open_alerts
+                """)
+            )
+
+            summary = dict(result.fetchone()._mapping)
+
+        return {
+            "status": "success",
+            "dashboard": summary
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve dashboard summary."
+        )
     finally:
         engine.dispose()
