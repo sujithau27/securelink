@@ -1,11 +1,24 @@
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from database import test_connection, get_engine
 
 app = FastAPI(title="SecureLink API", version="0.2.0")
 
+# -------------------- CORS SETTINGS --------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://securelink.vercel.app",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -------------------- REQUEST MODELS --------------------
 
@@ -188,8 +201,10 @@ def create_event(event: SecurityEvent):
 
             result = connection.execute(
                 text("""
-                    INSERT INTO events (device_id, event_type, description)
-                    VALUES (:device_id, :event_type, :description)
+                    INSERT INTO events
+                        (device_id, event_type, description)
+                    VALUES
+                        (:device_id, :event_type, :description)
                     RETURNING id
                 """),
                 {
@@ -362,7 +377,6 @@ def dashboard_summary():
                             AS open_alerts
                 """)
             )
-
             summary = dict(result.fetchone()._mapping)
 
         return {
