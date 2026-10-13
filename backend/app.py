@@ -20,6 +20,13 @@ class SecurityEvent(BaseModel):
     description: str = Field(min_length=1, max_length=500)
 
 
+class SecurityAlert(BaseModel):
+    device_id: str = Field(min_length=1, max_length=100)
+    alert_type: str = Field(min_length=1, max_length=100)
+    severity: str = Field(min_length=1, max_length=50)
+    message: str = Field(min_length=1, max_length=500)
+
+
 # -------------------- HOME --------------------
 
 @app.get("/")
@@ -65,14 +72,10 @@ def register_device(device: DeviceRegistration):
             connection.execute(
                 text("""
                     INSERT INTO devices (
-                        device_id,
-                        device_name,
-                        status
+                        device_id, device_name, status
                     )
                     VALUES (
-                        :device_id,
-                        :device_name,
-                        'offline'
+                        :device_id, :device_name, 'offline'
                     )
                     ON CONFLICT (device_id)
                     DO UPDATE SET
@@ -207,14 +210,10 @@ def create_event(event: SecurityEvent):
             result = connection.execute(
                 text("""
                     INSERT INTO events (
-                        device_id,
-                        event_type,
-                        description
+                        device_id, event_type, description
                     )
                     VALUES (
-                        :device_id,
-                        :event_type,
-                        :description
+                        :device_id, :event_type, :description
                     )
                     RETURNING id
                 """),
@@ -239,7 +238,7 @@ def create_event(event: SecurityEvent):
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Could not record security event. Check the events table structure."
+            detail="Could not record security event."
         )
 
     finally:
@@ -277,6 +276,114 @@ def list_events():
         raise HTTPException(
             status_code=500,
             detail="Could not retrieve security events."
+        )
+
+    finally:
+        engine.dispose()
+
+
+# -------------------- CREATE SECURITY ALERT --------------------
+
+@app.post("/api/alerts")
+def create_alert(alert: SecurityAlert):
+    engine = get_engine()
+
+    try:
+        with engine.begin() as connection:
+            device = connection.execute(
+                text("""
+                    SELECT device_id
+                    FROM devices
+                    WHERE device_id = :device_id
+                """),
+                {"device_id": alert.device_id}
+            ).first()
+
+            if device is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Device not found. Register it first."
+                )
+
+            result = connection.execute(
+                text("""
+                    INSERT INTO alerts (
+                        device_id,
+                        alert_type,
+                        severity,
+                        message,
+                        is_resolved
+                    )
+                    VALUES (
+                        :device_id,
+                        :alert_type,
+                        :severity,
+                        :message,
+                        FALSE
+                    )
+                    RETURNING id
+                """),
+                {
+                    "device_id": alert.device_id,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
+                    "message": alert.message
+                }
+            )
+
+            alert_id = result.scalar()
+
+        return {
+            "status": "success",
+            "message": "Security alert created",
+            "alert_id": alert_id
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create security alert."
+        )
+
+    finally:
+        engine.dispose()
+
+
+# -------------------- LIST SECURITY ALERTS --------------------
+
+@app.get("/api/alerts")
+def list_alerts():
+    engine = get_engine()
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    SELECT id, device_id, alert_type, severity,
+                           message, is_resolved, created_at
+                    FROM alerts
+                    ORDER BY created_at DESC
+                """)
+            )
+
+            alerts = [
+                dict(row._mapping)
+                for row in result
+            ]
+
+        return {
+            "status": "success",
+            "count": len(alerts),
+            "alerts": alerts
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve security alerts."
         )
 
     finally:
